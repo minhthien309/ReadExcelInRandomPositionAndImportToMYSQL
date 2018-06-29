@@ -1,4 +1,5 @@
 
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -16,6 +17,7 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
+import javax.swing.JOptionPane;
 
 /*
  * To change this license header, choose License Headers in Project Properties.
@@ -27,16 +29,17 @@ import org.apache.poi.ss.usermodel.WorkbookFactory;
  * @author Thien
  */
 public class Main {
-
-    private static String FILE_INPUT_STREAM = "TNK.xlsx";
-    public static int count = 0;
-
-
-    public static void reader() throws FileNotFoundException, IOException, InvalidFormatException, ClassNotFoundException {
-        Workbook workbook = WorkbookFactory.create(new FileInputStream(FILE_INPUT_STREAM));
-
-        Sheet sheet = workbook.getSheetAt(0);
-
+    
+    static SplashScreen splashscreen = new SplashScreen();
+    
+    public static void reader() throws FileNotFoundException, IOException, InvalidFormatException, ClassNotFoundException, SQLException {
+        if(!new File(EditMe.FILE_INPUT_STREAM).isFile()){
+            JOptionPane.showMessageDialog(null, "Không tìm thấy File Excel");
+            System.exit(0);
+        }
+        splashscreen.setVisible(true);
+        Workbook workbook = WorkbookFactory.create(new FileInputStream(EditMe.FILE_INPUT_STREAM));
+        Sheet sheet = workbook.getSheetAt(EditMe.sheet);
         int totalRows = sheet.getLastRowNum();
         ArrayList<Point> listTable = new ArrayList<>();
         ArrayList<Point> listMaxY = new ArrayList<>();
@@ -51,7 +54,7 @@ public class Main {
                 maxColIx = row.getLastCellNum();
                 for (int colIx = minColIx; colIx < maxColIx; colIx++) {
                     String check = fmt.formatCellValue(row.getCell(colIx));
-                    if (check != null && (check.equals("STT") || check.equals("Phần mềm"))) {
+                    if (check != null && (check.equals(EditMe.firstCol) || check.equals(EditMe.lastCol))) {
                         Point start = new Point();
                         Cell cell = row.getCell(colIx);
                         start.setXY(cell.getColumnIndex(), i);
@@ -63,7 +66,7 @@ public class Main {
         }
 
         for (int i = 0; i < listTable.size(); i++) {
-            if (listTable.get(i).getNote().equals("STT")) {
+            if (listTable.get(i).getNote().equals(EditMe.firstCol)) {
                 for (int j = listTable.get(i).getY(); j < totalRows + 2; j++) {
                     Row row = sheet.getRow(j);
                     try {
@@ -106,14 +109,16 @@ public class Main {
             for (int oy = y; oy < Oy + 1; oy++) {
                 z++;
                 Row r = sheet.getRow(oy);
-                String data[] = new String[5];
+                String data[] = new String[EditMe.columnArray.length];
                 int index = 0;
                 for (int ox = x; ox < Ox + 1; ox++) {
                     Cell cellRowNext = r.getCell(ox);
                     if (z != 1) {
-                        if (index != 0) {
-                        data[index] = "'" + fmt.formatCellValue(cellRowNext) + "'"; //Get data from excel
-                        }
+                        //if (index != 0) {
+                        String cellData = fmt.formatCellValue(cellRowNext);
+                        cellData = cellData.replace("'","''");
+                        data[index] = "'" + cellData + "'"; //Get data from excel
+                        //}
                         index++;
                     }
                 }
@@ -125,14 +130,19 @@ public class Main {
 
     }
 
-    public static void Sql(String[] data) throws ClassNotFoundException {
+    public static void Sql(String[] data) throws ClassNotFoundException, SQLException {
+        Connection connection = null;
         try {
-            Connection connection = SqlConnector.getMySQLConnection();
+            connection = SqlConnector.getMySQLConnection();
+            if(connection.isClosed()){
+                splashscreen.setVisible(false);
+                JOptionPane.showMessageDialog(null, "Có lỗi xảy ra trong quá trình kết nối cơ sở dữ liệu, vui lòng kiểm tra lại file config!");
+                System.exit(0);
+            }
             Statement statement = connection.createStatement();
             //ResultSet rs = null;
 
-            String sqlInsert = "INSERT INTO `tnk`";
-            String columnArray[] = new String[]{"STT", "Mã thiết bị", "Số lượng", "Thời gian bảo hành", "Phần mềm", "column6"};
+            String sqlInsert = "INSERT INTO `"+EditMe.tableName+"`";
             String columnNames = "";
             String valueString = "";
             String value[] = data;
@@ -143,8 +153,10 @@ public class Main {
                     columnNames += ",";
                     valueString += ",";
                 }
-                    columnNames += "`" + columnArray[i] + "`";
+                    columnNames += "`" + EditMe.columnArray[i] + "`";
                     valueString += value[i];
+                    
+                    
                 
             }
             
@@ -152,25 +164,46 @@ public class Main {
 
             sqlInsert = sqlInsert.replace("[", "");
             sqlInsert = sqlInsert.replace("]", "");
+            String keyName = EditMe.keyName;
+            System.out.println(sqlInsert);
+            if(!keyName.equals("")){
+                String checkQuery = "SELECT `"+EditMe.checkName+"` AS countValue FROM `"+EditMe.tableName+"` WHERE `"+EditMe.keyName+"` = " + value[EditMe.keyCol] + "";
+                statement.execute(checkQuery);
+                ResultSet resultSet = statement.getResultSet();
+                if (resultSet.next() == true) {
+                    int Amounts = resultSet.getInt("countValue") + Integer.parseInt(value[EditMe.checkCol].replace("'", ""));
+                    String updateQuery = "UPDATE `"+EditMe.tableName+"` SET `"+EditMe.checkName+"`=" + String.valueOf(Amounts) + " WHERE `"+EditMe.keyName+"`=" + value[EditMe.keyCol] + ";";
+                    statement.executeUpdate(updateQuery);
+                } else {
+                    statement.executeUpdate(sqlInsert);
 
-            //statement.executeUpdate(sqlInsert);
-            String checkQuery = "SELECT `Số lượng` AS countValue FROM `tnk` WHERE `Mã thiết bị` = " + value[1] + "";
-            statement.execute(checkQuery);
-            ResultSet resultSet = statement.getResultSet();
-            if (resultSet.next() == true) {
-                int Amounts = resultSet.getInt("countValue") + Integer.parseInt(value[2].replace("'", ""));
-                String updateQuery = "UPDATE `tnk` SET `Số lượng`=" + String.valueOf(Amounts) + " WHERE `Mã thiết bị`=" + value[1] + ";";
-                statement.executeUpdate(updateQuery);
-            } else {
-                statement.executeUpdate(sqlInsert);
+                }
             }
+            else{
+                    statement.executeUpdate(sqlInsert);
+////                   //statement.executeUpdate("INSERT INTO `tbl_receipt_delivery_place`(`place_type`,`name`,`contact_note`,`warehouse_note`,`address`) VALUES ('1','AKA VINA','0909 285 046','CÓ XE NÂNG,5H30 NGHỈ LÀM','');");
+            }
+            
         } catch (SQLException ex) {
+//            splashscreen.setVisible(false);
+//            JOptionPane.showMessageDialog(null, "Có lỗi xảy ra trong quá trình kết nối cơ sở dữ liệu, vui lòng kiểm tra lại file config!");
             Logger.getLogger(Main.class.getName()).log(Level.SEVERE, null, ex);
+//            System.exit(0);
+        }
+        finally{
+            connection.close();
         }
     }
 
     public static void main(String args[]) throws IOException, FileNotFoundException, InvalidFormatException, SQLException, ClassNotFoundException {
-        FILE_INPUT_STREAM = args[0]; 
-        reader();
+        //EditMe editme = new EditMe();
+        EditMe.getPropValues();
+        if(EditMe.check==1){
+            reader();
+            splashscreen.setVisible(false);
+            JOptionPane.showMessageDialog(null, "Đã xong!");
+            System.exit(0);
+        }
+        
     }
 }

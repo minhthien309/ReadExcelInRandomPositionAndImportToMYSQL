@@ -1,0 +1,15 @@
+﻿#Fri Jun 29 13:58:05 ICT 2018
+FILE_INPUT_STREAM=C:\\Users\\Thien\\Documents\\NetBeansProjects\\ExcelReader\\src\\thongtinkhachhang.xls
+tableName=tbl_receipt_delivery_place
+Columns=place_type,name,address,contact_note,warehouse_note
+keyName=
+keyCol=0
+checkCol=0
+sheet=0
+checkKey=
+cotDau=LOẠI NƠI
+cotCuoi=THÔNG TIN KHÁCH HÀNG
+hostName=localhost
+dbName=quochuy1406
+dbUser=root
+dbPass=root
